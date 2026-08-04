@@ -47,8 +47,3 @@ func (b *vmBackend) Mouse(x, y, squeakButtons int) {
 func (b *vmBackend) Key(squeakKeyCode int) {
 	b.interp.PushKey(squeakKeyCode)
 }
-
-// SetHostScreenSize satisfies display.HostScreenSizer (primitiveScreenSize).
-func (b *vmBackend) SetHostScreenSize(w, h int) {
-	b.interp.SetScreenSize(w, h)
-}

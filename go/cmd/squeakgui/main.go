@@ -43,6 +43,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Adopt the monitor's full resolution before booting: the image queries the
+	// screen size on start-up (primitiveScreenSize) and sizes its Display to it,
+	// so this must be set before BootToIdle.
+	if w, h := display.MonitorSize(); w > 0 && h > 0 {
+		interp.SetScreenSize(w, h)
+		fmt.Printf("host screen: %dx%d\n", w, h)
+	}
+
 	fmt.Println("booting for interactive display...")
 	interp.BootToIdle(2_000_000)
 	fmt.Printf("booted in %d bytecodes; opening window\n", interp.ByteCodeCount)

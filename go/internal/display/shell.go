@@ -30,9 +30,13 @@ type Backend interface {
 }
 
 // HostScreenSizer is an optional Backend extension: if implemented, the shell
-// reports the host monitor size (used by primitiveScreenSize).
-type HostScreenSizer interface {
-	SetHostScreenSize(w, h int)
+// MonitorSize returns the primary monitor's pixel size. Callable before Run so
+// the VM can boot the Squeak display at full resolution. Returns 0,0 if unknown.
+func MonitorSize() (int, int) {
+	if m := ebiten.Monitor(); m != nil {
+		return m.Size()
+	}
+	return 0, 0
 }
 
 type game struct {
@@ -49,11 +53,6 @@ func Run(backend Backend, fullscreen bool) error {
 	g := &game{backend: backend, w: w, h: h, canvas: ebiten.NewImage(max1(w), max1(h))}
 	if fullscreen {
 		ebiten.SetFullscreen(true)
-	}
-	if szr, ok := backend.(HostScreenSizer); ok {
-		if mw, mh := ebiten.Monitor().Size(); mw > 0 && mh > 0 {
-			szr.SetHostScreenSize(mw, mh)
-		}
 	}
 	ebiten.SetWindowSize(w, h)
 	ebiten.SetWindowTitle(backend.Title())

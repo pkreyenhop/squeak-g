@@ -46,6 +46,10 @@ make run              # or: make run-fullscreen
 # equivalently: go run ./cmd/squeakgui ../demo/mini.image
 ```
 
+The window opens at the monitor's **full resolution** by default: the host
+screen size is set before boot, so the image sizes its Display to it on
+start-up (via `primitiveScreenSize`) — no manual "restore display" needed.
+
 Window keyboard shortcuts: **Cmd/Alt-D** = "do it", **Cmd/Alt-P** = "print it"
 (on the current selection). They're injected as the editor's keystrokes in
 `internal/display/input.go` (`doItChar` / `printItChar`).
