@@ -49,21 +49,31 @@ func (g *game) pollInput() {
 	// (modifiers>>3)<<8 | charCode.
 	modByte := mods >> 3
 
-	// Cmd/Alt-P is bound to "do it": inject the keystroke the image recognizes
-	// as do-it (Cmd-d) and swallow the raw P for this frame.
-	doIt := (mods&(modCmd|modOption)) != 0 && inpututil.IsKeyJustPressed(ebiten.KeyP)
-	if doIt {
-		g.backend.Key((modCmd>>3)<<8 | doItChar)
+	// Editor shortcuts: Cmd/Alt-D = "do it", Cmd/Alt-P = "print it". Inject the
+	// keystroke the image recognizes (Cmd + letter), regardless of any
+	// OS-composed character (e.g. Option-P yields 'π'), and swallow the raw key
+	// for this frame.
+	shortcut, shortKey := 0, ebiten.Key(-1)
+	if mods&(modCmd|modOption) != 0 {
+		switch {
+		case inpututil.IsKeyJustPressed(ebiten.KeyD):
+			shortcut, shortKey = doItChar, ebiten.KeyD
+		case inpututil.IsKeyJustPressed(ebiten.KeyP):
+			shortcut, shortKey = printItChar, ebiten.KeyP
+		}
+	}
+	if shortcut != 0 {
+		g.backend.Key((modCmd>>3)<<8 | shortcut)
 	}
 
 	for _, r := range ebiten.AppendInputChars(nil) {
-		if doIt {
+		if shortcut != 0 {
 			continue
 		}
 		g.backend.Key(modByte<<8 | int(r))
 	}
 	for _, k := range inpututil.AppendJustPressedKeys(nil) {
-		if doIt && k == ebiten.KeyP {
+		if k == shortKey {
 			continue
 		}
 		if code, ok := specialKey(k); ok {
@@ -72,8 +82,11 @@ func (g *game) pollInput() {
 	}
 }
 
-// doItChar is the character the Squeak editor maps to "do it" (Cmd-d).
-const doItChar = 'd'
+// Characters the Squeak editor maps to its commands (with the Cmd modifier).
+const (
+	doItChar    = 'd'
+	printItChar = 'p'
+)
 
 func currentModifiers() int {
 	m := 0
