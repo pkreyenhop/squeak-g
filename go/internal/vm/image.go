@@ -23,6 +23,17 @@ type Image struct {
 	OldSpaceBytes  int
 	HeaderFlags    uint32
 	CompactClasses []*Object // 31 entries; may hold nil for unused slots
+
+	// Allocation state (Squeak.Image): new objects get negative oops and a
+	// hash derived from lastHash. No explicit GC — Go's collector reclaims
+	// unreachable Squeak objects, and contexts are recycled by the interpreter.
+	newSpaceCount int
+	lastHash      uint32
+	nilObj        *Object
+
+	// character cache for getCharacter (classic images: Character instances).
+	characterTable map[int]*Object
+	characterClass *Object
 }
 
 // classic base-version identification (from vm.image.js).
@@ -93,8 +104,8 @@ func ReadImage(name string, buf []byte) (*Image, error) {
 	objectMemorySize := int(r.u32())
 	oldBaseAddr := r.u32()
 	specialObjectsOopInt := r.u32()
-	_ = r.u32() // lastHash
-	_ = r.u32() // savedWindowSize
+	img.lastHash = r.u32() // lastHash, seeds the allocation hash sequence
+	_ = r.u32()            // savedWindowSize
 	img.HeaderFlags = r.u32()
 	for i := 0; i < 4; i++ {
 		_ = r.u32() // savedHeaderWords tail
@@ -205,8 +216,14 @@ func (img *Image) decorateKnownObjects() {
 	if o, ok := spl[SplObFalseObject].(*Object); ok {
 		o.IsFalse = true
 	}
+	if o, ok := spl[SplObNilObject].(*Object); ok {
+		img.nilObj = o
+	}
 	if o, ok := spl[SplObClassFloat].(*Object); ok {
 		o.IsFloatClass = true
+	}
+	if o, ok := spl[SplObClassCharacter].(*Object); ok {
+		img.characterClass = o
 	}
 	if ccArray, ok := spl[SplObCompactClasses].(*Object); ok {
 		img.CompactClasses = make([]*Object, len(ccArray.Pointers))
@@ -252,4 +269,73 @@ func (img *Image) SpecialObject(index int) *Object {
 		return o
 	}
 	return nil
+}
+
+// registerObject assigns a temporary (negative) oop and an identity hash to a
+// newly allocated object (Squeak.Image>>registerObject).
+func (img *Image) registerObject(o *Object) int {
+	img.newSpaceCount++
+	o.Oop = -img.newSpaceCount
+	img.lastHash = (13849 + 27181*img.lastHash) & 0xFFFFFFFF
+	return int(img.lastHash & 0xFFF)
+}
+
+// InstantiateClass allocates a new instance of aClass with indexableSize
+// indexable slots (Squeak.Image>>instantiateClass).
+func (img *Image) InstantiateClass(aClass *Object, indexableSize int) *Object {
+	o := &Object{}
+	hash := img.registerObject(o)
+	o.initInstanceOf(aClass, indexableSize, hash, img.nilObj)
+	return o
+}
+
+// Clone shallow-copies an object (Squeak.Image>>clone).
+func (img *Image) Clone(object *Object) *Object {
+	o := &Object{}
+	hash := img.registerObject(o)
+	o.initAsClone(object, hash)
+	return o
+}
+
+// BytesLeft reports available memory. We don't track a real heap limit (Go's
+// GC manages memory), so we report a large constant to allow allocation while
+// still letting the image's runaway-allocation guard trip on absurd sizes.
+func (img *Image) BytesLeft() int { return 100000000 }
+
+// SomeInstanceOf returns the first old-space instance of a class, or nil.
+func (img *Image) SomeInstanceOf(cls *Object) *Object {
+	for obj := img.FirstOldObject; obj != nil; obj = obj.NextObject {
+		if obj.SqClass == cls {
+			return obj
+		}
+	}
+	return nil
+}
+
+// NextInstanceAfter returns the next old-space instance of obj's class, or nil.
+func (img *Image) NextInstanceAfter(obj *Object) *Object {
+	cls := obj.SqClass
+	for o := obj.NextObject; o != nil; o = o.NextObject {
+		if o.SqClass == cls {
+			return o
+		}
+	}
+	return nil
+}
+
+// GetCharacter returns the (cached) Character instance for a code point.
+// Classic images store the value in the Character's first inst var.
+func (img *Image) GetCharacter(unicode int) *Object {
+	if img.characterTable == nil {
+		img.characterTable = map[int]*Object{}
+	}
+	if c := img.characterTable[unicode]; c != nil {
+		return c
+	}
+	c := img.InstantiateClass(img.characterClass, 0)
+	if len(c.Pointers) > 0 {
+		c.Pointers[0] = unicode
+	}
+	img.characterTable[unicode] = c
+	return c
 }

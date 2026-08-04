@@ -45,6 +45,68 @@ type Object struct {
 	classInt uint32
 }
 
+// --- instantiation -------------------------------------------------------
+
+// initInstanceOf initializes a freshly allocated instance of aClass with the
+// given number of indexable slots, mirroring Squeak.Object>>initInstanceOf.
+func (o *Object) initInstanceOf(aClass *Object, indexableSize, hash int, nilObj *Object) {
+	o.SqClass = aClass
+	o.Hash = hash
+	instSpec := aClass.asInt(aClass.Pointers[ClassFormat])
+	instSize := ((instSpec >> 1) & 0x3F) + ((instSpec >> 10) & 0xC0) - 1
+	o.Format = (instSpec >> 7) & 0xF
+
+	if o.Format < 8 {
+		if o.Format != 6 {
+			if instSize+indexableSize > 0 {
+				o.Pointers = fillPointers(instSize+indexableSize, nilObj)
+			}
+		} else { // Words
+			if indexableSize > 0 {
+				if aClass.IsFloatClass {
+					o.IsFloat = true
+					o.Float = 0.0
+				} else {
+					o.Words = make([]uint32, indexableSize)
+				}
+			}
+		}
+	} else { // Bytes
+		if indexableSize > 0 {
+			o.Bytes = make([]byte, indexableSize)
+		}
+	}
+}
+
+// initAsClone copies another object's body (Squeak.Object>>initAsClone).
+func (o *Object) initAsClone(original *Object, hash int) {
+	o.SqClass = original.SqClass
+	o.Hash = hash
+	o.Format = original.Format
+	if original.IsFloat {
+		o.IsFloat = true
+		o.Float = original.Float
+		return
+	}
+	if original.Pointers != nil {
+		o.Pointers = append([]Value(nil), original.Pointers...)
+	}
+	if original.Words != nil {
+		o.Words = append([]uint32(nil), original.Words...)
+	}
+	if original.Bytes != nil {
+		o.Bytes = append([]byte(nil), original.Bytes...)
+	}
+}
+
+func fillPointers(length int, filler *Object) []Value {
+	a := make([]Value, length)
+	for i := range a {
+		a[i] = filler
+	}
+	return a
+}
+
 // --- loading -------------------------------------------------------------
 
 // initFromImage records the unmapped header data read from the image.
@@ -154,11 +216,44 @@ func (o *Object) decodeFloat(bits []byte, littleEndian bool) float64 {
 
 // --- testing -------------------------------------------------------------
 
-func (o *Object) IsWords() bool    { return o.Format == 6 }
-func (o *Object) IsBytes() bool    { return o.Format >= 8 && o.Format <= 11 }
-func (o *Object) IsPointers() bool { return o.Format <= 4 }
-func (o *Object) IsWeak() bool     { return o.Format == 4 }
-func (o *Object) IsMethod() bool   { return o.Format >= 12 }
+func (o *Object) IsWords() bool        { return o.Format == 6 }
+func (o *Object) IsBytes() bool        { return o.Format >= 8 && o.Format <= 11 }
+func (o *Object) IsWordsOrBytes() bool { return o.Format == 6 || (o.Format >= 8 && o.Format <= 11) }
+func (o *Object) IsPointers() bool     { return o.Format <= 4 }
+func (o *Object) IsWeak() bool         { return o.Format == 4 }
+func (o *Object) IsMethod() bool       { return o.Format >= 12 }
+
+func sameFormats(a, b int) bool {
+	if a < 8 {
+		return a == b
+	}
+	return (a & 0xC) == (b & 0xC)
+}
+
+// SameFormatAs reports whether two objects have compatible storage formats.
+func (o *Object) SameFormatAs(other *Object) bool { return sameFormats(o.Format, other.Format) }
+
+// IndexableSize returns the number of indexable slots (or -1 if not indexable).
+// allowBeyondSP is true for old-primitive images (contexts report full size).
+func (o *Object) IndexableSize(allowBeyondSP, isContext bool) int {
+	fmt := o.Format
+	if fmt < 2 {
+		return -1 // not indexable
+	}
+	if fmt == 3 && isContext && !allowBeyondSP {
+		return asIntValue(o.Pointers[ContextStackPointer])
+	}
+	if fmt < 6 {
+		return o.PointersSize() - o.InstSize()
+	}
+	if fmt < 8 {
+		return o.WordsSize()
+	}
+	if fmt < 12 {
+		return o.BytesSize()
+	}
+	return o.BytesSize() + 4*o.PointersSize()
+}
 
 // --- accessing -----------------------------------------------------------
 

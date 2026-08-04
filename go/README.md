@@ -1,13 +1,14 @@
 # SqueakG — a Go port of SqueakJS
 
-A work-in-progress port of the [SqueakJS](https://squeak.js.org/) Smalltalk
-virtual machine (in the parent directory) to Go, with a native
-[Ebitengine](https://ebitengine.org/) display.
+A port of the [SqueakJS](https://squeak.js.org/) Smalltalk virtual machine (in
+the parent directory) to Go, with a native [Ebitengine](https://ebitengine.org/)
+display.
 
-This is a **bootstrap MVP**: the foundational, exacting layers (object model +
-image loader) are ported and verified against a real image, and the
-window/input shell is in place. The bytecode interpreter and primitives — the
-largest remaining piece — are next.
+**It boots.** The Go VM loads the classic `demo/mini.image`, runs the bytecode
+interpreter with primitives and a BitBlt, and renders the Mini Squeak 2.2 MVC
+desktop — windows, title bars, and StrikeFont text — headless to a PNG:
+
+![Mini Squeak booted by the Go VM](docs/mini-desktop.png)
 
 ## Status
 
@@ -16,37 +17,45 @@ largest remaining piece — are next.
 | Constants / layouts | `vm.js` | `internal/vm/constants.go` | ✅ done |
 | Object model (classic) | `vm.object.js` | `internal/vm/object.go` | ✅ done |
 | Image loader (classic 6502) | `vm.image.js` | `internal/vm/image.go` | ✅ done & verified |
-| Interpreter init path | `vm.interpreter.js` | `internal/vm/interp.go` | ✅ done (scheduler→process→context) |
-| Bytecode dispatch loop | `vm.interpreter.js` | `internal/vm/interp.go` | ⛔ **not yet ported** |
-| Primitives | `vm.primitives.js` | — | ⛔ not started |
-| BitBlt | `plugins/BitBltPlugin.js` | — | ⛔ not started |
-| Display + input shell | `vm.display.browser.js` | `internal/display/` | ✅ shell done (demo backend) |
-| Spur / 64-bit image format | `vm.object.spur.js` | — | ⛔ classic 32-bit only so far |
+| Bytecode interpreter (V3) | `vm.interpreter.js` | `internal/vm/interp*.go` | ✅ boots mini.image |
+| Primitives (core set) | `vm.primitives.js` | `internal/vm/primitives*.go` | ✅ enough to boot |
+| BitBlt (pixel-based) | `plugins/BitBltPlugin.js` | `internal/vm/bitblt.go` | ✅ 1-bit MVC works |
+| Display → PNG renderer | `vm.display.browser.js` | `internal/vm/render.go` | ✅ depths 1/2/4/8/16/32 |
+| Ebitengine window/input | `vm.display.browser.js` | `internal/display/` | ✅ shell (demo backend) |
+| Spur / 64-bit / Sista | `vm.object.spur.js` | — | ⛔ classic 32-bit only |
+| JIT, FFI, sockets, sound | `jit.js`, plugins | — | ⛔ not ported |
 
-"Verified" means: loading `demo/mini.image` decodes 15,893 objects, all class
-names resolve, and the scheduler → active process → suspended context → method
-→ receiver chain resolves to `aSystemDictionary` — i.e. the whole pointer graph
-is correctly rectified. See `internal/vm/image_test.go`.
+Display/input primitives use a **headless policy** (most fail so the image's
+Smalltalk fallback runs); the VM boots to idle and the screen is read from the
+`Display` form. Wiring the live Ebitengine backend to the running VM (and mouse/
+keyboard events) is the next step for an interactive window.
 
 ## Build & run
 
-Requires Go 1.24+.
+Requires Go 1.24+ (cgo needed on macOS/Linux only for the `-display` window).
 
-Load an image and print diagnostics (no GUI, no cgo needed):
+Boot mini.image and save the screen as a PNG:
+
+```bash
+cd go
+go run ./cmd/squeak -boot 0 -snap desktop.png ../demo/mini.image
+```
+
+Load and print diagnostics only (no run):
 
 ```bash
 cd go
 go run ./cmd/squeak ../demo/mini.image
 ```
 
-Open the display shell (currently a demo backend until the interpreter runs):
+Boot with a backtrace + primitive histogram (debugging):
 
 ```bash
 cd go
-go run ./cmd/squeak -display
+go run ./cmd/squeak -boot 0 -profile ../demo/mini.image
 ```
 
-Run the tests:
+Run the tests (includes a boot-and-render regression test):
 
 ```bash
 cd go
