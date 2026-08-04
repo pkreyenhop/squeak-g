@@ -509,6 +509,35 @@ func (p *Primitives) instantiate(cls *Object, size int) Value {
 	return p.vm.InstantiateClass(cls, size)
 }
 
+func (p *Primitives) stackBoolean(d int) bool {
+	o := p.asObj(p.vm.stackValue(d))
+	if o != nil && o.IsTrue {
+		return true
+	}
+	if o != nil && o.IsFalse {
+		return false
+	}
+	p.success = false
+	return false
+}
+
+func (p *Primitives) primitiveArrayBecome(argCount int, doBothWays, copyHash bool) bool {
+	rcvr := p.stackNonInteger(argCount)
+	arg := p.stackNonInteger(argCount - 1)
+	if argCount > 1 {
+		copyHash = p.stackBoolean(argCount - 2)
+	}
+	if !p.success {
+		return false
+	}
+	if p.vm.Image.BulkBecome(rcvr.Pointers, arg.Pointers, doBothWays, copyHash) {
+		p.vm.flushMethodCache() // lookups may have changed
+	} else {
+		p.success = false
+	}
+	return p.popNIfOK(argCount)
+}
+
 func (p *Primitives) identityHash(o *Object) Value {
 	if o == nil {
 		p.success = false

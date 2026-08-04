@@ -23,6 +23,8 @@ desktop — windows, title bars, and StrikeFont text — headless to a PNG:
 | Display → PNG renderer | `vm.display.browser.js` | `internal/vm/render.go` | ✅ depths 1/2/4/8/16/32 |
 | Ebitengine window (live) | `vm.display.browser.js` | `internal/display/`, `cmd/squeak/vmbackend.go` | ✅ interactive |
 | Mouse / keyboard (MVC Sensor) | `vm.input.browser.js` | `internal/vm/input.go` | ✅ polling model |
+| Do-it / print-it (Compiler) | — | `internal/vm/eval.go` | ✅ `-eval` / `-doit` |
+| `become:` (identity swap) | `vm.image.js` | `internal/vm/image.go` | ✅ prims 72/128/248/249 |
 | Spur / 64-bit / Sista | `vm.object.spur.js` | — | ⛔ classic 32-bit only |
 | JIT, FFI, sockets, sound | `jit.js`, plugins | — | ⛔ not ported |
 
@@ -33,24 +35,34 @@ using Squeak's button/modifier encoding.
 
 ## Build & run
 
-Requires Go 1.24+ (cgo needed on macOS/Linux only for the live window).
+Requires Go 1.24+. There are two commands: `cmd/squeak` is **headless** (no GUI
+dependency — safe for CI/servers) and `cmd/squeakgui` is the **live window**
+(links Ebitengine; cgo needed on macOS/Linux only).
 
 Run mini.image live in an interactive window (mouse + keyboard):
 
 ```bash
-cd go
-go run ./cmd/squeak -run ../demo/mini.image          # windowed
-go run ./cmd/squeak -run -fullscreen ../demo/mini.image
+make run              # or: make run-fullscreen
+# equivalently: go run ./cmd/squeakgui ../demo/mini.image
 ```
 
-Or from the repo root: `make run` / `make run-fullscreen`.
+Do-it / print-it — evaluate a Smalltalk expression headlessly:
+
+```bash
+go run ./cmd/squeak -eval "3 + 4" ../demo/mini.image             # => 7
+go run ./cmd/squeak -eval "'hello' asUppercase" ../demo/mini.image  # => 'HELLO'
+go run ./cmd/squeak -eval "100 factorial" ../demo/mini.image
+go run ./cmd/squeak -doit "Smalltalk at: #Foo put: 42" ../demo/mini.image
+# simple expressions also via: make eval EXPR='3 + 4'
+```
 
 Boot mini.image and save the screen as a PNG (headless, no cgo):
 
 ```bash
-cd go
 go run ./cmd/squeak -boot 0 -snap desktop.png ../demo/mini.image
 ```
+
+Set `SQUEAKG_VERBOSE=1` to log one-time diagnostics (missing primitives, etc.).
 
 Load and print diagnostics only (no run):
 

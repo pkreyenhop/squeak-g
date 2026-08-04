@@ -60,8 +60,7 @@ type Interpreter struct {
 
 	breakOut    bool
 	isIdle      bool
-	debugDNU    bool
-	dnuSeen     int
+	evalBooted  bool
 	startupTime time.Time
 }
 
@@ -82,7 +81,6 @@ func NewInterpreter(img *Image) (*Interpreter, error) {
 	vm.methodCacheMask = 1023
 	vm.interruptCheckCounterFeedBackReset = 1000
 	vm.interruptCheckCounter = 1000
-	vm.debugDNU = false
 	if err := vm.loadImageState(); err != nil {
 		return nil, err
 	}

@@ -60,13 +60,6 @@ func (vm *Interpreter) findSelectorInClass(selector *Object, trueArgCount int, s
 	if selector == dnuSel {
 		panic("Recursive not understood error encountered")
 	}
-	if vm.debugDNU && selector.BytesAsString() == "asciiValue" && vm.dnuSeen == 0 {
-		vm.dnuSeen++
-		fmt.Println("=== backtrace at 'SmallInteger>>asciiValue' DNU ===")
-		for _, l := range vm.Backtrace(15) {
-			fmt.Println("  " + l)
-		}
-	}
 	dnuMsg := vm.createActualMessage(selector, trueArgCount, startingClass)
 	vm.popNandPush(argCount, dnuMsg)
 	return vm.findSelectorInClass(dnuSel, 1, startingClass, 1)

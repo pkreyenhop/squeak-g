@@ -60,10 +60,15 @@ func NewPrimitives(vm *Interpreter) *Primitives {
 	}
 }
 
+// verbose enables one-time diagnostics (missing primitives, etc.) on stderr.
+var verbose = os.Getenv("SQUEAKG_VERBOSE") != ""
+
 func (p *Primitives) warnOnce(msg string) {
 	if !p.warned[msg] {
 		p.warned[msg] = true
-		fmt.Fprintln(os.Stderr, "squeak: "+msg)
+		if verbose {
+			fmt.Fprintln(os.Stderr, "squeak: "+msg)
+		}
 	}
 }
 
@@ -195,6 +200,8 @@ func (p *Primitives) doPrimitive(index, argCount int, primMethod *Object) bool {
 		return p.popNandPushIfOK(argCount+1, p.instantiate(p.stackNonInteger(0), 0))
 	case 71:
 		return p.popNandPushIfOK(argCount+1, p.instantiate(p.stackNonInteger(1), int(p.stackPos32(0))))
+	case 72:
+		return p.primitiveArrayBecome(argCount, false, true) // one way, copy hash
 	case 75:
 		return p.popNandPushIfOK(argCount+1, p.identityHash(p.stackNonInteger(0)))
 	case 77:
@@ -288,6 +295,8 @@ func (p *Primitives) doPrimitive(index, argCount int, primMethod *Object) bool {
 		return false // deferDisplayUpdates
 	case 127:
 		return p.popNIfOK(argCount) // showDisplayRect (no-op flush)
+	case 128:
+		return p.primitiveArrayBecome(argCount, true, true) // both ways, copy hash
 	case 129:
 		return p.popNandPushIfOK(argCount+1, p.vm.Image.SpecialObjectsArray)
 	case 130:
@@ -337,6 +346,10 @@ func (p *Primitives) doPrimitive(index, argCount int, primMethod *Object) bool {
 		return p.popNandPushIfOK(argCount+1, p.millisecondClockValue()*1000) // microsecondClockUTC approx
 	case 241:
 		return p.popNandPushIfOK(argCount+1, p.millisecondClockValue()*1000)
+	case 248:
+		return p.primitiveArrayBecome(argCount, false, false) // one way, no copy hash
+	case 249:
+		return p.primitiveArrayBecome(argCount, false, true) // one way, opt copy hash
 	case 254:
 		return p.primitiveVMParameter(argCount)
 

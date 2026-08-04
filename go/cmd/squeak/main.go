@@ -1,10 +1,12 @@
-// Command squeak loads and runs a Squeak image with the Go VM.
+// Command squeak is the headless Go Squeak VM (no GUI dependency).
 //
-//	squeak <image>                 load and print diagnostics
-//	squeak -boot N <image>         run up to N bytecodes (0 = until idle)
-//	squeak -boot 0 -snap out.png <image>   boot to idle, save the screen as PNG
-//	squeak -display                open the Ebitengine window (demo backend)
-//	squeak -boot 0 -profile <image>        add a backtrace + primitive histogram
+//	squeak <image>                      load and print diagnostics
+//	squeak -boot N <image>              run up to N bytecodes (0 = until idle)
+//	squeak -boot 0 -snap out.png <img>  boot to idle, save the screen as PNG
+//	squeak -eval 'EXPR' <image>         print-it: evaluate and print the result
+//	squeak -doit 'EXPR' <image>         do-it: evaluate for effect
+//
+// For the interactive window, use the squeakgui command (make run).
 package main
 
 import (
@@ -15,32 +17,20 @@ import (
 	"runtime/debug"
 	"sort"
 
-	"squeakg/internal/display"
 	"squeakg/internal/vm"
 )
 
 func main() {
-	showDisplay := flag.Bool("display", false, "open the Ebitengine display shell (demo backend)")
-	width := flag.Int("w", 800, "display width (demo backend)")
-	height := flag.Int("h", 600, "display height (demo backend)")
 	boot := flag.Int("boot", -1, "run up to N bytecodes (0 = run until idle); -1 = don't run")
 	snap := flag.String("snap", "", "after booting, render the Display to this PNG file")
 	profile := flag.Bool("profile", false, "print a backtrace and primitive histogram after booting")
-	run := flag.Bool("run", false, "run the image live in an interactive window")
-	fullscreen := flag.Bool("fullscreen", false, "open the interactive window fullscreen")
+	eval := flag.String("eval", "", "print-it: compile+run a Smalltalk expression and print its printString")
+	doit := flag.String("doit", "", "do-it: compile+run a Smalltalk expression for its effect")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: squeak [flags] <image-file>")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
-
-	if *showDisplay {
-		if err := display.Run(display.NewDemoBackend(*width, *height), *fullscreen); err != nil {
-			fmt.Fprintln(os.Stderr, "display:", err)
-			os.Exit(1)
-		}
-		return
-	}
 
 	if flag.NArg() < 1 {
 		flag.Usage()
@@ -56,31 +46,37 @@ func main() {
 		fmt.Fprintln(os.Stderr, "load image:", err)
 		os.Exit(1)
 	}
-	vm.PrintDiagnostics(img, os.Stdout)
 
 	interp, err := vm.NewInterpreter(img)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "interpreter init:", err)
-		return
+		os.Exit(1)
 	}
-	fmt.Println(interp.DescribeInitialContext())
 
-	// Interactive: run the image live in a window (implies no headless boot).
-	if *run {
-		fmt.Println("booting for interactive display...")
-		interp.BootToIdle(2_000_000)
-		fmt.Printf("booted in %d bytecodes; opening window\n", interp.ByteCodeCount)
-		be := newVMBackend(interp, img, "Squeak-G — "+flag.Arg(0))
-		if err := display.Run(be, *fullscreen); err != nil {
-			fmt.Fprintln(os.Stderr, "display:", err)
-			os.Exit(1)
+	// Do-it / print-it: evaluate a Smalltalk expression and exit.
+	if *eval != "" || *doit != "" {
+		if *doit != "" {
+			if _, err := interp.Evaluate(*doit); err != nil {
+				fmt.Fprintln(os.Stderr, "doit:", err)
+				os.Exit(1)
+			}
+		}
+		if *eval != "" {
+			out, err := interp.PrintIt(*eval)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "print-it:", err)
+				os.Exit(1)
+			}
+			fmt.Println(out)
 		}
 		return
 	}
 
-	// -snap implies booting until idle unless a bytecode budget was given.
+	vm.PrintDiagnostics(img, os.Stdout)
+	fmt.Println(interp.DescribeInitialContext())
+
 	if *snap != "" && *boot < 0 {
-		*boot = 0
+		*boot = 0 // -snap implies boot-to-idle
 	}
 
 	if *boot >= 0 {

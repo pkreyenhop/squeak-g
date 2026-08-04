@@ -323,6 +323,67 @@ func (img *Image) NextInstanceAfter(obj *Object) *Object {
 	return nil
 }
 
+// BulkBecome swaps the identities of the objects in from[] with to[]
+// (Squeak.Image>>bulkBecome). twoWay makes it symmetric; copyHash swaps hashes
+// so identity hash stays with the reference. Returns false if inputs are
+// invalid. All old-space references are rewritten; Go's GC handles the rest.
+func (img *Image) BulkBecome(from, to []Value, twoWay, copyHash bool) bool {
+	if from == nil {
+		return to == nil
+	}
+	n := len(from)
+	if n != len(to) {
+		return false
+	}
+	mutations := make(map[*Object]*Object, n*2)
+	for i := 0; i < n; i++ {
+		f, ok := from[i].(*Object)
+		if !ok || f == nil {
+			return false
+		}
+		if _, dup := mutations[f]; dup {
+			return false
+		}
+		if _, ok := to[i].(*Object); !ok {
+			return false
+		}
+		mutations[f] = to[i].(*Object)
+	}
+	if twoWay {
+		for i := 0; i < n; i++ {
+			t, ok := to[i].(*Object)
+			if !ok || t == nil {
+				return false
+			}
+			if _, dup := mutations[t]; dup {
+				return false
+			}
+			mutations[t] = from[i].(*Object)
+		}
+	}
+	if copyHash {
+		for i := 0; i < n; i++ {
+			f := from[i].(*Object)
+			t := to[i].(*Object)
+			f.Hash, t.Hash = t.Hash, f.Hash
+		}
+	}
+	// Rewrite every reference in old space (class pointer + body pointers).
+	for obj := img.FirstOldObject; obj != nil; obj = obj.NextObject {
+		if mut := mutations[obj.SqClass]; mut != nil {
+			obj.SqClass = mut
+		}
+		for j, p := range obj.Pointers {
+			if po, ok := p.(*Object); ok {
+				if mut := mutations[po]; mut != nil {
+					obj.Pointers[j] = mut
+				}
+			}
+		}
+	}
+	return true
+}
+
 // GetCharacter returns the (cached) Character instance for a code point.
 // Classic images store the value in the Character's first inst var.
 func (img *Image) GetCharacter(unicode int) *Object {
