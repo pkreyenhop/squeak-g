@@ -43,7 +43,7 @@ go run ./cmd/squeak -run ../demo/mini.image          # windowed
 go run ./cmd/squeak -run -fullscreen ../demo/mini.image
 ```
 
-Or from the repo root: `make play` / `make play-fullscreen`.
+Or from the repo root: `make run` / `make run-fullscreen`.
 
 Boot mini.image and save the screen as a PNG (headless, no cgo):
 
