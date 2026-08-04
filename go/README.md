@@ -46,9 +46,19 @@ make run              # or: make run-fullscreen
 # equivalently: go run ./cmd/squeakgui ../demo/mini.image
 ```
 
-The window opens at the monitor's **full resolution** by default: the host
-screen size is set before boot, so the image sizes its Display to it on
-start-up (via `primitiveScreenSize`) — no manual "restore display" needed.
+The window sizes the Squeak display to the host screen before boot (the image
+sizes its Display to it on start-up via `primitiveScreenSize` — no manual
+"restore display" needed).
+
+**Bigger UI / fonts:** the mini image only ships 12px and 15px fonts, so use
+the `-scale` factor instead — it runs the desktop at monitor-size/scale and
+magnifies it with crisp nearest-neighbor pixels. `make run` defaults to
+`SCALE=2` (double-size); `make run SCALE=1` is native full resolution.
+
+```bash
+make run SCALE=2               # 2x-magnified UI (default)
+go run ./cmd/squeakgui -scale 2 ../demo/mini.image
+```
 
 Window keyboard shortcuts: **Cmd/Alt-D** = "do it", **Cmd/Alt-P** = "print it"
 (on the current selection). They're injected as the editor's keystrokes in

@@ -18,6 +18,7 @@ BINARY     := $(BIN_DIR)/squeak
 BINARY_GUI := $(BIN_DIR)/squeakgui
 IMAGE      ?= demo/mini.image
 EXPR       ?= 3 + 4
+SCALE      ?= 2
 
 # Absolute paths so binaries run from the repo root.
 BINARY_ABS     := $(abspath $(BINARY))
@@ -38,11 +39,12 @@ build-gui:
 	cd $(GO_DIR) && $(GO) build -o $(BINARY_GUI_ABS) ./cmd/squeakgui
 
 # Boot the image and open the live, interactive window.
+# SCALE magnifies the UI (SCALE=1 for native full resolution).
 run: build-gui
-	$(BINARY_GUI_ABS) $(IMAGE)
+	$(BINARY_GUI_ABS) -scale $(SCALE) $(IMAGE)
 
 run-fullscreen: build-gui
-	$(BINARY_GUI_ABS) -fullscreen $(IMAGE)
+	$(BINARY_GUI_ABS) -fullscreen -scale $(SCALE) $(IMAGE)
 
 # Print-it: evaluate a Smalltalk expression headlessly.
 eval: build

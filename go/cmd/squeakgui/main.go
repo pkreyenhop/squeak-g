@@ -17,8 +17,9 @@ import (
 
 func main() {
 	fullscreen := flag.Bool("fullscreen", false, "open the window fullscreen")
+	scale := flag.Int("scale", 1, "integer UI magnification (2 = double-size fonts, crisp)")
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: squeakgui [-fullscreen] <image-file>")
+		fmt.Fprintln(os.Stderr, "usage: squeakgui [-fullscreen] [-scale N] <image-file>")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -43,12 +44,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Adopt the monitor's full resolution before booting: the image queries the
-	// screen size on start-up (primitiveScreenSize) and sizes its Display to it,
-	// so this must be set before BootToIdle.
-	if w, h := display.MonitorSize(); w > 0 && h > 0 {
-		interp.SetScreenSize(w, h)
-		fmt.Printf("host screen: %dx%d\n", w, h)
+	if *scale < 1 {
+		*scale = 1
+	}
+	// Adopt the monitor's resolution (divided by the scale factor) before
+	// booting: the image queries the screen size on start-up
+	// (primitiveScreenSize) and sizes its Display to it, so this must be set
+	// before BootToIdle. A scale of 2 gives a 2x-magnified, crisp UI.
+	if mw, mh := display.MonitorSize(); mw > 0 && mh > 0 {
+		dw, dh := mw / *scale, mh / *scale
+		interp.SetScreenSize(dw, dh)
+		fmt.Printf("host screen: %dx%d, display: %dx%d (scale %dx)\n", mw, mh, dw, dh, *scale)
 	}
 
 	fmt.Println("booting for interactive display...")
@@ -56,7 +62,7 @@ func main() {
 	fmt.Printf("booted in %d bytecodes; opening window\n", interp.ByteCodeCount)
 
 	be := newVMBackend(interp, img, "Squeak-G — "+flag.Arg(0))
-	if err := display.Run(be, *fullscreen); err != nil {
+	if err := display.Run(be, *fullscreen, *scale); err != nil {
 		fmt.Fprintln(os.Stderr, "display:", err)
 		os.Exit(1)
 	}

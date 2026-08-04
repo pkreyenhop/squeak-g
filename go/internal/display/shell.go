@@ -47,14 +47,21 @@ type game struct {
 
 // Run opens the window and blocks until it is closed. Must be called on the
 // main goroutine. If fullscreen is true the window covers the whole monitor.
-func Run(backend Backend, fullscreen bool) error {
+// scale (>=1) magnifies the Squeak display with crisp nearest-neighbor pixels,
+// so a scale of 2 makes fonts and everything else twice as big.
+func Run(backend Backend, fullscreen bool, scale int) error {
+	if scale < 1 {
+		scale = 1
+	}
 	frame := backend.Frame()
 	w, h := frame.Rect.Dx(), frame.Rect.Dy()
 	g := &game{backend: backend, w: w, h: h, canvas: ebiten.NewImage(max1(w), max1(h))}
 	if fullscreen {
 		ebiten.SetFullscreen(true)
 	}
-	ebiten.SetWindowSize(w, h)
+	// The window is scale times the logical display; Ebitengine scales content
+	// up to fill it (Layout returns the logical size).
+	ebiten.SetWindowSize(w*scale, h*scale)
 	ebiten.SetWindowTitle(backend.Title())
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	return ebiten.RunGame(g)
