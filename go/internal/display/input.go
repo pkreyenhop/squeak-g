@@ -48,15 +48,32 @@ func (g *game) pollInput() {
 	// Keyboard: typed characters first, then special keys. Squeak keycode is
 	// (modifiers>>3)<<8 | charCode.
 	modByte := mods >> 3
+
+	// Cmd/Alt-P is bound to "do it": inject the keystroke the image recognizes
+	// as do-it (Cmd-d) and swallow the raw P for this frame.
+	doIt := (mods&(modCmd|modOption)) != 0 && inpututil.IsKeyJustPressed(ebiten.KeyP)
+	if doIt {
+		g.backend.Key((modCmd>>3)<<8 | doItChar)
+	}
+
 	for _, r := range ebiten.AppendInputChars(nil) {
+		if doIt {
+			continue
+		}
 		g.backend.Key(modByte<<8 | int(r))
 	}
 	for _, k := range inpututil.AppendJustPressedKeys(nil) {
+		if doIt && k == ebiten.KeyP {
+			continue
+		}
 		if code, ok := specialKey(k); ok {
 			g.backend.Key(modByte<<8 | code)
 		}
 	}
 }
+
+// doItChar is the character the Squeak editor maps to "do it" (Cmd-d).
+const doItChar = 'd'
 
 func currentModifiers() int {
 	m := 0

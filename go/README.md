@@ -46,6 +46,10 @@ make run              # or: make run-fullscreen
 # equivalently: go run ./cmd/squeakgui ../demo/mini.image
 ```
 
+Window keyboard shortcut: **Cmd/Alt-P** does "do it" (evaluates the current
+selection). It's injected as the editor's do-it keystroke in
+`internal/display/input.go` (`doItChar`).
+
 Do-it / print-it — evaluate a Smalltalk expression headlessly:
 
 ```bash
