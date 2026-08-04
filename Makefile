@@ -18,7 +18,7 @@ IMAGE    ?= demo/mini.image
 # Absolute path so the binary can be run from the repo root.
 BINARY_ABS := $(abspath $(BINARY))
 
-.PHONY: all build run run-display clean test fmt vet snap
+.PHONY: all build run run-display clean test fmt vet snap play play-fullscreen
 
 all: build
 
@@ -48,3 +48,9 @@ clean:
 snap: build
 	$(BINARY_ABS) -boot 0 -snap desktop.png $(IMAGE)
 	@echo "wrote desktop.png"
+
+play: build
+	$(BINARY_ABS) -run $(IMAGE)
+
+play-fullscreen: build
+	$(BINARY_ABS) -run -fullscreen $(IMAGE)

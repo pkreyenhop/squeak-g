@@ -21,20 +21,31 @@ desktop — windows, title bars, and StrikeFont text — headless to a PNG:
 | Primitives (core set) | `vm.primitives.js` | `internal/vm/primitives*.go` | ✅ enough to boot |
 | BitBlt (pixel-based) | `plugins/BitBltPlugin.js` | `internal/vm/bitblt.go` | ✅ 1-bit MVC works |
 | Display → PNG renderer | `vm.display.browser.js` | `internal/vm/render.go` | ✅ depths 1/2/4/8/16/32 |
-| Ebitengine window/input | `vm.display.browser.js` | `internal/display/` | ✅ shell (demo backend) |
+| Ebitengine window (live) | `vm.display.browser.js` | `internal/display/`, `cmd/squeak/vmbackend.go` | ✅ interactive |
+| Mouse / keyboard (MVC Sensor) | `vm.input.browser.js` | `internal/vm/input.go` | ✅ polling model |
 | Spur / 64-bit / Sista | `vm.object.spur.js` | — | ⛔ classic 32-bit only |
 | JIT, FFI, sockets, sound | `jit.js`, plugins | — | ⛔ not ported |
 
-Display/input primitives use a **headless policy** (most fail so the image's
-Smalltalk fallback runs); the VM boots to idle and the screen is read from the
-`Display` form. Wiring the live Ebitengine backend to the running VM (and mouse/
-keyboard events) is the next step for an interactive window.
+The live window drives the VM one UI cycle per frame: it runs the interpreter
+until the image polls the Sensor (`primitiveMouseButtons`, the MVC frame/idle
+boundary), reads the `Display` form to RGBA, and feeds mouse/keyboard back in
+using Squeak's button/modifier encoding.
 
 ## Build & run
 
-Requires Go 1.24+ (cgo needed on macOS/Linux only for the `-display` window).
+Requires Go 1.24+ (cgo needed on macOS/Linux only for the live window).
 
-Boot mini.image and save the screen as a PNG:
+Run mini.image live in an interactive window (mouse + keyboard):
+
+```bash
+cd go
+go run ./cmd/squeak -run ../demo/mini.image          # windowed
+go run ./cmd/squeak -run -fullscreen ../demo/mini.image
+```
+
+Or from the repo root: `make play` / `make play-fullscreen`.
+
+Boot mini.image and save the screen as a PNG (headless, no cgo):
 
 ```bash
 cd go

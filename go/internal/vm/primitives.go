@@ -31,6 +31,15 @@ type Primitives struct {
 	atCache       [32]atCacheEntry
 	atPutCache    [32]atCacheEntry
 	nonCachedInfo atCacheEntry
+
+	// interactive input state (set by the host display backend).
+	mouseX, mouseY int
+	buttons        int
+	keys           []int
+	displayIdle    int
+	displayDirty   bool
+	screenW        int
+	screenH        int
 }
 
 type atCacheEntry struct {
@@ -219,7 +228,7 @@ func (p *Primitives) doPrimitive(index, argCount int, primMethod *Object) bool {
 
 	// I/O (90-109) -- headless policy
 	case 90:
-		return false // mousePoint
+		return p.primitiveMousePoint(argCount)
 	case 91:
 		return false // testDisplayDepth
 	case 93:
@@ -244,13 +253,13 @@ func (p *Primitives) doPrimitive(index, argCount int, primMethod *Object) bool {
 	case 105:
 		return p.popNandPushIfOK(argCount+1, p.doStringReplace())
 	case 106:
-		return false // screenSize
+		return p.primitiveScreenSize(argCount)
 	case 107:
-		return false // mouseButtons
+		return p.primitiveMouseButtons(argCount)
 	case 108:
-		return false // kbdNext
+		return p.primitiveKeyboardNext(argCount)
 	case 109:
-		return false // kbdPeek
+		return p.primitiveKeyboardPeek(argCount)
 
 	// System (110-119)
 	case 110:

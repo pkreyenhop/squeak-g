@@ -643,6 +643,7 @@ func (vm *Interpreter) goIdle() {
 	vm.forceInterruptCheck()
 	vm.checkForInterrupts()
 	vm.breakOut = true
+	vm.isIdle = true
 }
 
 var _ = fmt.Sprintf

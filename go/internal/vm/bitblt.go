@@ -255,6 +255,8 @@ func (p *Primitives) copyBits(bb *Object) bool {
 	p.bltCount++
 	if destObj == p.vm.Image.SpecialObject(SplObTheDisplay) {
 		p.bltToDisplay++
+		p.displayIdle = 0 // drawing resets the MVC idle counter
+		p.displayDirty = true
 	}
 	if w <= 0 || h <= 0 {
 		return true // nothing to draw, but still a success

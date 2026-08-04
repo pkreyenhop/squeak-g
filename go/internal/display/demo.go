@@ -51,12 +51,10 @@ func (d *DemoBackend) Step() {
 	}
 }
 
-func (d *DemoBackend) Mouse(x, y, buttons int) {
-	d.mouseX, d.mouseY, d.buttons = x, y, buttons
+func (d *DemoBackend) Mouse(x, y, squeakButtons int) {
+	d.mouseX, d.mouseY, d.buttons = x, y, squeakButtons
 }
 
-func (d *DemoBackend) Key(down bool, keyCode int, r rune) {
-	if down && r != 0 {
-		d.lastRunes = append(d.lastRunes, r)
-	}
+func (d *DemoBackend) Key(squeakKeyCode int) {
+	d.lastRunes = append(d.lastRunes, rune(squeakKeyCode&0xFF))
 }

@@ -59,6 +59,7 @@ type Interpreter struct {
 	SendCount     int
 
 	breakOut    bool
+	isIdle      bool
 	debugDNU    bool
 	dnuSeen     int
 	startupTime time.Time
@@ -174,6 +175,7 @@ func (vm *Interpreter) decodeSqueakSP(squeakSP int) int {
 func (vm *Interpreter) Run(maxBytecodes int) int {
 	start := vm.ByteCodeCount
 	vm.breakOut = false
+	vm.isIdle = false
 	for !vm.breakOut {
 		vm.interpretOne()
 		if maxBytecodes > 0 && vm.ByteCodeCount-start >= maxBytecodes {
@@ -181,6 +183,21 @@ func (vm *Interpreter) Run(maxBytecodes int) int {
 		}
 	}
 	return vm.ByteCodeCount - start
+}
+
+// Idle reports whether the last Run stopped because the image went idle (as
+// opposed to a display/frame breakout or a bytecode cap).
+func (vm *Interpreter) Idle() bool { return vm.isIdle }
+
+// BootToIdle repeatedly runs UI cycles until the image is genuinely idle or a
+// safety cap is hit. Used for headless boot-to-snapshot.
+func (vm *Interpreter) BootToIdle(perCycleCap int) {
+	for i := 0; i < 200000; i++ {
+		vm.Run(perCycleCap)
+		if vm.isIdle {
+			return
+		}
+	}
 }
 
 func (vm *Interpreter) nextByte() int {

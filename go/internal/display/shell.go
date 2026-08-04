@@ -12,14 +12,8 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
-// Buttons bitmask, matching Squeak's mouse button encoding.
-const (
-	ButtonRed    = 4 // left
-	ButtonYellow = 2 // right / middle
-	ButtonBlue   = 1 // link / meta
-)
-
 // Backend is implemented by the VM. The shell drives it once per display frame.
+// Input is delivered already encoded in Squeak's conventions (see input.go).
 type Backend interface {
 	// Title is the window title.
 	Title() string
@@ -27,16 +21,20 @@ type Backend interface {
 	// different size if the image resized its display; the shell adapts.
 	Frame() *image.RGBA
 	// Step advances the VM by roughly one display frame's worth of work.
-	// Input events pushed via Mouse/Key before Step become visible to it.
 	Step()
-	// Mouse reports the pointer position (in display pixels) and button bitmask.
-	Mouse(x, y, buttons int)
-	// Key reports a keyboard event. down is true for press, false for release;
-	// r is the typed rune (0 if none), keyCode is a raw key identifier.
-	Key(down bool, keyCode int, r rune)
+	// Mouse reports the pointer position (in display pixels) and the full Squeak
+	// buttons word (mouse bits OR keyboard-modifier bits).
+	Mouse(x, y, squeakButtons int)
+	// Key enqueues a Squeak keyboard code (modifiers<<8 | charCode).
+	Key(squeakKeyCode int)
 }
 
-// game adapts a Backend to ebiten.Game.
+// HostScreenSizer is an optional Backend extension: if implemented, the shell
+// reports the host monitor size (used by primitiveScreenSize).
+type HostScreenSizer interface {
+	SetHostScreenSize(w, h int)
+}
+
 type game struct {
 	backend Backend
 	canvas  *ebiten.Image
@@ -44,11 +42,19 @@ type game struct {
 }
 
 // Run opens the window and blocks until it is closed. Must be called on the
-// main goroutine.
-func Run(backend Backend) error {
+// main goroutine. If fullscreen is true the window covers the whole monitor.
+func Run(backend Backend, fullscreen bool) error {
 	frame := backend.Frame()
 	w, h := frame.Rect.Dx(), frame.Rect.Dy()
 	g := &game{backend: backend, w: w, h: h, canvas: ebiten.NewImage(max1(w), max1(h))}
+	if fullscreen {
+		ebiten.SetFullscreen(true)
+	}
+	if szr, ok := backend.(HostScreenSizer); ok {
+		if mw, mh := ebiten.Monitor().Size(); mw > 0 && mh > 0 {
+			szr.SetHostScreenSize(mw, mh)
+		}
+	}
 	ebiten.SetWindowSize(w, h)
 	ebiten.SetWindowTitle(backend.Title())
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)

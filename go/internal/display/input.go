@@ -5,32 +5,106 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
-// pollInput reads the current mouse/keyboard state from Ebitengine and forwards
-// it to the backend. Called once per Update (frame).
+// Squeak button/modifier bits (from vm.input.js).
+const (
+	mouseBlue   = 1 // right
+	mouseYellow = 2 // middle
+	mouseRed    = 4 // left
+	modShift    = 8
+	modCtrl     = 16
+	modOption   = 32
+	modCmd      = 64
+)
+
+// pollInput reads Ebitengine input, encodes it in Squeak's conventions, and
+// forwards it to the backend once per frame.
 func (g *game) pollInput() {
-	// Mouse: report position and current button bitmask every frame.
+	mods := currentModifiers()
+
+	// Mouse: position (clamped to the display) plus buttons OR modifiers.
 	mx, my := ebiten.CursorPosition()
+	if mx < 0 {
+		mx = 0
+	} else if mx >= g.w {
+		mx = g.w - 1
+	}
+	if my < 0 {
+		my = 0
+	} else if my >= g.h {
+		my = g.h - 1
+	}
 	buttons := 0
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
-		buttons |= ButtonRed
-	}
-	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight) {
-		buttons |= ButtonYellow
+		buttons |= mouseRed
 	}
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonMiddle) {
-		buttons |= ButtonBlue
+		buttons |= mouseYellow
 	}
-	g.backend.Mouse(mx, my, buttons)
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight) {
+		buttons |= mouseBlue
+	}
+	g.backend.Mouse(mx, my, buttons|mods)
 
-	// Keyboard: typed characters (runes).
+	// Keyboard: typed characters first, then special keys. Squeak keycode is
+	// (modifiers>>3)<<8 | charCode.
+	modByte := mods >> 3
 	for _, r := range ebiten.AppendInputChars(nil) {
-		g.backend.Key(true, 0, r)
+		g.backend.Key(modByte<<8 | int(r))
 	}
-	// Raw key presses/releases (for non-character keys and modifiers).
 	for _, k := range inpututil.AppendJustPressedKeys(nil) {
-		g.backend.Key(true, int(k), 0)
+		if code, ok := specialKey(k); ok {
+			g.backend.Key(modByte<<8 | code)
+		}
 	}
-	for _, k := range inpututil.AppendJustReleasedKeys(nil) {
-		g.backend.Key(false, int(k), 0)
+}
+
+func currentModifiers() int {
+	m := 0
+	if ebiten.IsKeyPressed(ebiten.KeyShiftLeft) || ebiten.IsKeyPressed(ebiten.KeyShiftRight) {
+		m |= modShift
 	}
+	if ebiten.IsKeyPressed(ebiten.KeyControlLeft) || ebiten.IsKeyPressed(ebiten.KeyControlRight) {
+		m |= modCtrl
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyAltLeft) || ebiten.IsKeyPressed(ebiten.KeyAltRight) {
+		m |= modOption
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyMetaLeft) || ebiten.IsKeyPressed(ebiten.KeyMetaRight) {
+		m |= modCmd
+	}
+	return m
+}
+
+// specialKey maps non-character keys to Squeak/Mac key codes. Returns false for
+// keys handled via AppendInputChars (letters, digits, punctuation).
+func specialKey(k ebiten.Key) (int, bool) {
+	switch k {
+	case ebiten.KeyBackspace:
+		return 8, true
+	case ebiten.KeyTab:
+		return 9, true
+	case ebiten.KeyEnter, ebiten.KeyNumpadEnter:
+		return 13, true
+	case ebiten.KeyEscape:
+		return 27, true
+	case ebiten.KeyDelete:
+		return 127, true
+	case ebiten.KeyHome:
+		return 1, true
+	case ebiten.KeyEnd:
+		return 4, true
+	case ebiten.KeyPageUp:
+		return 11, true
+	case ebiten.KeyPageDown:
+		return 12, true
+	case ebiten.KeyLeft:
+		return 28, true
+	case ebiten.KeyRight:
+		return 29, true
+	case ebiten.KeyUp:
+		return 30, true
+	case ebiten.KeyDown:
+		return 31, true
+	}
+	return 0, false
 }

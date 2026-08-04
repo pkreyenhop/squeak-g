@@ -26,6 +26,8 @@ func main() {
 	boot := flag.Int("boot", -1, "run up to N bytecodes (0 = run until idle); -1 = don't run")
 	snap := flag.String("snap", "", "after booting, render the Display to this PNG file")
 	profile := flag.Bool("profile", false, "print a backtrace and primitive histogram after booting")
+	run := flag.Bool("run", false, "run the image live in an interactive window")
+	fullscreen := flag.Bool("fullscreen", false, "open the interactive window fullscreen")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: squeak [flags] <image-file>")
 		flag.PrintDefaults()
@@ -33,7 +35,7 @@ func main() {
 	flag.Parse()
 
 	if *showDisplay {
-		if err := display.Run(display.NewDemoBackend(*width, *height)); err != nil {
+		if err := display.Run(display.NewDemoBackend(*width, *height), *fullscreen); err != nil {
 			fmt.Fprintln(os.Stderr, "display:", err)
 			os.Exit(1)
 		}
@@ -63,6 +65,19 @@ func main() {
 	}
 	fmt.Println(interp.DescribeInitialContext())
 
+	// Interactive: run the image live in a window (implies no headless boot).
+	if *run {
+		fmt.Println("booting for interactive display...")
+		interp.BootToIdle(2_000_000)
+		fmt.Printf("booted in %d bytecodes; opening window\n", interp.ByteCodeCount)
+		be := newVMBackend(interp, img, "Squeak-G — "+flag.Arg(0))
+		if err := display.Run(be, *fullscreen); err != nil {
+			fmt.Fprintln(os.Stderr, "display:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	// -snap implies booting until idle unless a bytecode budget was given.
 	if *snap != "" && *boot < 0 {
 		*boot = 0
@@ -81,7 +96,11 @@ func main() {
 						interp.ByteCodeCount, r, debug.Stack())
 				}
 			}()
-			interp.Run(*boot)
+			if *boot == 0 {
+				interp.BootToIdle(2_000_000)
+			} else {
+				interp.Run(*boot)
+			}
 		}()
 		fmt.Printf("executed %d bytecodes, %d sends\n", interp.ByteCodeCount, interp.SendCount)
 		bt, bd := interp.BltStats()
