@@ -25,6 +25,7 @@ desktop — windows, title bars, and StrikeFont text — headless to a PNG:
 | Mouse / keyboard (MVC Sensor) | `vm.input.browser.js` | `internal/vm/input.go` | ✅ polling model |
 | Do-it / print-it (Compiler) | — | `internal/vm/eval.go` | ✅ `-eval` / `-doit` |
 | `become:` (identity swap) | `vm.image.js` | `internal/vm/image.go` | ✅ prims 72/128/248/249 |
+| Image save (snapshot) | `vm.image.js` | `internal/vm/snapshot.go` | ✅ prim 97, writes classic format |
 | Spur / 64-bit / Sista | `vm.object.spur.js` | — | ⛔ classic 32-bit only |
 | JIT, FFI, sockets, sound | `jit.js`, plugins | — | ⛔ not ported |
 

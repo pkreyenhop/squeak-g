@@ -246,6 +246,8 @@ func (p *Primitives) doPrimitive(index, argCount int, primMethod *Object) bool {
 		return false // inputWord
 	case 96:
 		return p.namedBitBltCopyBits(argCount)
+	case 97:
+		return p.primitiveSnapshot(argCount)
 	case 100:
 		return p.vm.primitivePerformWithArgs(argCount, true)
 	case 101:
