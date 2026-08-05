@@ -101,7 +101,10 @@ func (vm *Interpreter) Evaluate(source string) (result Value, err error) {
 		}
 	}()
 	if !vm.evalBooted {
-		vm.BootToIdle(2_000_000)
+		if vm.prim.screenW == 0 {
+			vm.SetScreenSize(640, 480) // some images only idle once sized
+		}
+		vm.Boot(60_000_000)
 		vm.evalBooted = true
 	}
 	compiler := vm.globalNamed("Compiler")

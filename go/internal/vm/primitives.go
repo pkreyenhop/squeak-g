@@ -340,6 +340,19 @@ func (p *Primitives) doPrimitive(index, argCount int, primMethod *Object) bool {
 		}
 		return false
 
+	// Sound (old images, SoundPlugin). We have no audio device, so degrade
+	// gracefully: SoundPlayer start/stop/play become no-ops that answer self,
+	// otherwise SoundPlayer>>shutDown fails during a snapshot and the save
+	// appears to hang in a "primitive has failed" debugger.
+	case 170, 171, 172, 174, 175: // soundStart / startWithSema / stop / playSamples / playSilence
+		if p.oldPrims {
+			return p.popNIfOK(argCount) // answer self
+		}
+	case 173: // soundAvailableSpace
+		if p.oldPrims {
+			return p.popNandPushIfOK(argCount+1, 0)
+		}
+
 	// Other (230-254)
 	case 230:
 		return p.primitiveRelinquishProcessor(argCount)
