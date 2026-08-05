@@ -342,7 +342,7 @@ func (p *Primitives) doPrimitive(index, argCount int, primMethod *Object) bool {
 	case 140:
 		return false // beep
 	case 141:
-		return false // clipboard
+		return p.primitiveClipboardText(argCount)
 	case 142:
 		return p.popNandPushIfOK(argCount+1, p.makeStString("/SqueakG"))
 	case 143, 144:

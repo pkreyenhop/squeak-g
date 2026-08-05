@@ -72,9 +72,10 @@ make run SCALE=2               # 2x-magnified UI (default)
 go run ./cmd/squeakgui -scale 2 ../demo/mini.image
 ```
 
-Window keyboard shortcuts: **Cmd/Alt-D** = "do it", **Cmd/Alt-P** = "print it"
-(on the current selection). They're injected as the editor's keystrokes in
-`internal/display/input.go` (`doItChar` / `printItChar`).
+Window keyboard shortcuts: any **Cmd/Alt-letter** is delivered to the Squeak
+editor as `Cmd-<letter>`, so its standard bindings work — **Cmd-D** do it,
+**Cmd-P** print it, **Cmd-C/X/V** copy/cut/paste (bridged to the OS clipboard
+via `primitiveClipboardText`), **Cmd-A** select all, **Cmd-Z** undo, etc.
 
 Do-it / print-it — evaluate a Smalltalk expression headlessly:
 

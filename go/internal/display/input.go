@@ -49,44 +49,31 @@ func (g *game) pollInput() {
 	// (modifiers>>3)<<8 | charCode.
 	modByte := mods >> 3
 
-	// Editor shortcuts: Cmd/Alt-D = "do it", Cmd/Alt-P = "print it". Inject the
-	// keystroke the image recognizes (Cmd + letter), regardless of any
-	// OS-composed character (e.g. Option-P yields 'π'), and swallow the raw key
-	// for this frame.
-	shortcut, shortKey := 0, ebiten.Key(-1)
-	if mods&(modCmd|modOption) != 0 {
-		switch {
-		case inpututil.IsKeyJustPressed(ebiten.KeyD):
-			shortcut, shortKey = doItChar, ebiten.KeyD
-		case inpututil.IsKeyJustPressed(ebiten.KeyP):
-			shortcut, shortKey = printItChar, ebiten.KeyP
-		}
-	}
-	if shortcut != 0 {
-		g.backend.Key((modCmd>>3)<<8 | shortcut)
-	}
-
-	for _, r := range ebiten.AppendInputChars(nil) {
-		if shortcut != 0 {
-			continue
-		}
-		g.backend.Key(modByte<<8 | int(r))
-	}
+	// When Cmd/Alt is held, a letter key is an editor command (Cmd-C copy,
+	// Cmd-V paste, Cmd-X cut, Cmd-A select all, Cmd-D do it, Cmd-P print it, ...).
+	// The OS usually suppresses the composed character for these combos, so we
+	// inject them explicitly as Cmd+<letter> (forcing the Cmd modifier bit the
+	// Squeak editor expects) and swallow any composed char for this frame.
+	cmdHeld := mods&(modCmd|modOption) != 0
+	suppressChars := false
 	for _, k := range inpututil.AppendJustPressedKeys(nil) {
-		if k == shortKey {
+		if cmdHeld && k >= ebiten.KeyA && k <= ebiten.KeyZ {
+			letter := 'a' + int(k-ebiten.KeyA)
+			g.backend.Key((modCmd>>3)<<8 | letter)
+			suppressChars = true
 			continue
 		}
 		if code, ok := specialKey(k); ok {
 			g.backend.Key(modByte<<8 | code)
 		}
 	}
+	for _, r := range ebiten.AppendInputChars(nil) {
+		if suppressChars {
+			continue
+		}
+		g.backend.Key(modByte<<8 | int(r))
+	}
 }
-
-// Characters the Squeak editor maps to its commands (with the Cmd modifier).
-const (
-	doItChar    = 'd'
-	printItChar = 'p'
-)
 
 func currentModifiers() int {
 	m := 0

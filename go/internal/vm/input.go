@@ -78,6 +78,23 @@ func (vm *Interpreter) DisplayModified() bool {
 	return m
 }
 
+// primitiveClipboardText (141) bridges the Squeak clipboard to the host OS
+// clipboard: 0 args reads it (answers a String), 1 arg writes it.
+func (p *Primitives) primitiveClipboardText(argCount int) bool {
+	switch argCount {
+	case 0:
+		p.vm.popNandPush(1, p.makeStString(hostClipboardRead()))
+		return true
+	case 1:
+		if s := p.asObj(p.vm.top()); s != nil && s.Bytes != nil {
+			hostClipboardWrite(s.BytesAsString())
+		}
+		p.vm.pop() // answer the receiver
+		return true
+	}
+	return false
+}
+
 func (p *Primitives) primitiveMousePoint(argCount int) bool {
 	return p.popNandPushIfOK(argCount+1, p.makePointWithXandY(p.mouseX, p.mouseY))
 }
