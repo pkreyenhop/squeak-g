@@ -91,7 +91,15 @@ func (vm *Interpreter) sendAndRun(rcvr Value, selector *Object, args ...Value) (
 // Evaluate compiles and runs a Smalltalk expression ("do it") via the image's
 // Compiler and answers the result object. The image is first booted to a
 // quiescent (idle) state so injecting the send doesn't race the scheduler.
-func (vm *Interpreter) Evaluate(source string) (Value, error) {
+func (vm *Interpreter) Evaluate(source string) (result Value, err error) {
+	// A do-it runs in the idle process here; an expression that blocks on a
+	// semaphore or forces a process switch can strand it. Recover so the CLI
+	// reports an error rather than crashing.
+	defer func() {
+		if r := recover(); r != nil {
+			result, err = nil, fmt.Errorf("evaluation failed: %v", r)
+		}
+	}()
 	if !vm.evalBooted {
 		vm.BootToIdle(2_000_000)
 		vm.evalBooted = true

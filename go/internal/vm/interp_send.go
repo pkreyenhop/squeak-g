@@ -16,6 +16,13 @@ func (vm *Interpreter) send(selector *Object, argCount int, doSuper bool) {
 		lookupClass = vm.getClass(newRcvr)
 	}
 	entry := vm.findSelectorInClass(selector, argCount, lookupClass, argCount)
+	if entry.primIndex != 0 {
+		// Note details for verification of at:/at:put: primitives. This must be
+		// done here (per send), not only on method-cache misses, so a stale
+		// selector can't mis-tag an unrelated receiver in the at-cache.
+		vm.verifyAtSelector = selector
+		vm.verifyAtClass = lookupClass
+	}
 	vm.executeNewMethod(newRcvr, entry.method, entry.argCount, entry.primIndex, entry.mClass, selector)
 }
 
@@ -41,11 +48,6 @@ func (vm *Interpreter) findSelectorInClass(selector *Object, trueArgCount int, s
 			if newMethod.IsMethod() {
 				cacheEntry.primIndex = newMethod.MethodPrimitiveIndex()
 				cacheEntry.argCount = newMethod.MethodNumArgs()
-				if cacheEntry.primIndex != 0 {
-					// note details for verification of at:/at:put: primitives
-					vm.verifyAtSelector = selector
-					vm.verifyAtClass = startingClass
-				}
 			} else {
 				cacheEntry.primIndex = 576 // primitiveInvokeObjectAsMethod
 				cacheEntry.argCount = trueArgCount
