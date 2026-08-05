@@ -111,15 +111,26 @@ func (p *Primitives) positive32BitValueOf(v Value) uint32 {
 		return 0
 	}
 	o, ok := v.(*Object)
-	if !ok || o.SqClass != p.vm.SpecialObjects[SplObClassLargePositiveInteger] || len(o.Bytes) != 4 {
+	if !ok {
 		p.success = false
 		return 0
 	}
-	var value uint32
-	for i := 0; i < 4; i++ {
-		value |= uint32(o.Bytes[i]) << (8 * i)
+	if o.IsFloat {
+		return math.Float32bits(float32(o.Float))
 	}
-	return value
+	if o.SqClass == p.vm.SpecialObjects[SplObClassLargePositiveInteger] {
+		var value uint32
+		n := len(o.Bytes)
+		if n > 4 {
+			n = 4
+		}
+		for i := 0; i < n; i++ {
+			value |= uint32(o.Bytes[i]) << (8 * i)
+		}
+		return value
+	}
+	p.success = false
+	return 0
 }
 
 func (p *Primitives) pos32BitIntFor(v uint32) Value {
@@ -299,6 +310,25 @@ func (p *Primitives) objectAt(cameFromBytecode, convertChars, includeInstVars bo
 	if !p.success {
 		return nil
 	}
+	if array.IsFloat {
+		bits := math.Float64bits(array.Float)
+		var w1, w2 uint32
+		if !p.vm.Image.LittleEndian {
+			w1 = uint32(bits >> 32)
+			w2 = uint32(bits & 0xFFFFFFFF)
+		} else {
+			w1 = uint32(bits & 0xFFFFFFFF)
+			w2 = uint32(bits >> 32)
+		}
+		if index == 1 {
+			return p.pos32BitIntFor(w1)
+		}
+		if index == 2 {
+			return p.pos32BitIntFor(w2)
+		}
+		p.success = false
+		return nil
+	}
 	var info *atCacheEntry
 	if cameFromBytecode {
 		info = &p.atCache[array.Hash&31]
@@ -314,32 +344,50 @@ func (p *Primitives) objectAt(cameFromBytecode, convertChars, includeInstVars bo
 		return nil
 	}
 	if includeInstVars {
-		return array.Pointers[index-1]
-	}
-	if array.IsPointers() {
-		return array.Pointers[index-1+info.ivarOffset]
-	}
-	if array.IsWords() {
-		w := array.Words[index-1]
-		if info.convertChars {
-			return p.charFromInt(int(w & 0x3FFFFFFF))
+		if index-1 >= 0 && index-1 < len(array.Pointers) {
+			return array.Pointers[index-1]
 		}
-		return p.pos32BitIntFor(w)
-	}
-	if array.IsBytes() {
-		b := int(array.Bytes[index-1]) & 0xFF
-		if info.convertChars {
-			return p.charFromInt(b)
-		}
-		return b
-	}
-	// CompiledMethod: bytes follow the pointer (header+literals) area
-	offset := array.PointersSize() * 4
-	if index-1-offset < 0 {
 		p.success = false
 		return nil
 	}
-	return int(array.Bytes[index-1-offset]) & 0xFF
+	if array.IsPointers() {
+		idx := index - 1 + info.ivarOffset
+		if idx >= 0 && idx < len(array.Pointers) {
+			return array.Pointers[idx]
+		}
+		p.success = false
+		return nil
+	}
+	if array.IsWords() {
+		if index-1 >= 0 && index-1 < len(array.Words) {
+			w := array.Words[index-1]
+			if info.convertChars {
+				return p.charFromInt(int(w & 0x3FFFFFFF))
+			}
+			return p.pos32BitIntFor(w)
+		}
+		p.success = false
+		return nil
+	}
+	if array.IsBytes() {
+		if index-1 >= 0 && index-1 < len(array.Bytes) {
+			b := int(array.Bytes[index-1]) & 0xFF
+			if info.convertChars {
+				return p.charFromInt(b)
+			}
+			return b
+		}
+		p.success = false
+		return nil
+	}
+	// CompiledMethod: bytes follow the pointer (header+literals) area
+	offset := array.PointersSize() * 4
+	idx := index - 1 - offset
+	if idx < 0 || idx >= len(array.Bytes) {
+		p.success = false
+		return nil
+	}
+	return int(array.Bytes[idx]) & 0xFF
 }
 
 func (p *Primitives) objectAtPut(cameFromBytecode, convertChars, includeInstVars bool) Value {
@@ -365,20 +413,29 @@ func (p *Primitives) objectAtPut(cameFromBytecode, convertChars, includeInstVars
 	convertChars = info.convertChars
 	objToPut := p.vm.stackValue(0)
 	if includeInstVars {
-		array.Dirty = true
-		array.Pointers[index-1] = objToPut
-		return objToPut
+		if index-1 >= 0 && index-1 < len(array.Pointers) {
+			array.Dirty = true
+			array.Pointers[index-1] = objToPut
+			return objToPut
+		}
+		p.success = false
+		return nil
 	}
 	if array.IsPointers() {
-		array.Dirty = true
-		array.Pointers[index-1+info.ivarOffset] = objToPut
-		return objToPut
+		idx := index - 1 + info.ivarOffset
+		if idx >= 0 && idx < len(array.Pointers) {
+			array.Dirty = true
+			array.Pointers[idx] = objToPut
+			return objToPut
+		}
+		p.success = false
+		return nil
 	}
 	var intToPut int
 	if array.IsWords() {
 		if convertChars {
 			c := p.asObj(objToPut)
-			if c == nil || c.SqClass != p.vm.SpecialObjects[SplObClassCharacter] {
+			if c == nil || len(c.Pointers) == 0 || c.SqClass != p.vm.SpecialObjects[SplObClassCharacter] {
 				p.success = false
 				return objToPut
 			}
@@ -387,39 +444,46 @@ func (p *Primitives) objectAtPut(cameFromBytecode, convertChars, includeInstVars
 			intToPut = int(p.positive32BitValueOf(objToPut))
 		}
 		if p.success {
-			array.Words[index-1] = uint32(intToPut)
+			if index-1 >= 0 && index-1 < len(array.Words) {
+				array.Words[index-1] = uint32(intToPut)
+			} else {
+				p.success = false
+			}
 		}
 		return objToPut
 	}
 	if convertChars {
 		c := p.asObj(objToPut)
-		if c == nil || c.SqClass != p.vm.SpecialObjects[SplObClassCharacter] {
+		if c == nil || len(c.Pointers) == 0 || c.SqClass != p.vm.SpecialObjects[SplObClassCharacter] {
 			p.success = false
 			return objToPut
 		}
 		intToPut = asIntValue(c.Pointers[0])
 	} else {
-		n, ok := objToPut.(int)
-		if !ok {
-			p.success = false
-			return objToPut
-		}
-		intToPut = n
+		intToPut = int(p.positive32BitValueOf(objToPut))
+	}
+	if !p.success {
+		return objToPut
 	}
 	if intToPut < 0 || intToPut > 255 {
 		p.success = false
 		return objToPut
 	}
 	if array.IsBytes() {
-		array.Bytes[index-1] = byte(intToPut)
+		if index-1 >= 0 && index-1 < len(array.Bytes) {
+			array.Bytes[index-1] = byte(intToPut)
+		} else {
+			p.success = false
+		}
 		return objToPut
 	}
 	offset := array.PointersSize() * 4
-	if index-1-offset < 0 {
+	idx := index - 1 - offset
+	if idx < 0 || idx >= len(array.Bytes) {
 		p.success = false
 		return nil
 	}
-	array.Bytes[index-1-offset] = byte(intToPut)
+	array.Bytes[idx] = byte(intToPut)
 	return objToPut
 }
 
@@ -644,11 +708,6 @@ func (p *Primitives) registerSemaphore(specialIndex int) Value {
 		p.vm.SpecialObjects[specialIndex] = p.vm.NilObj
 	}
 	return p.vm.stackValue(1)
-}
-
-func (p *Primitives) primitiveInputSemaphore(argCount int) bool {
-	p.vm.popNandPush(argCount+1, p.vm.NilObj)
-	return true
 }
 
 func (p *Primitives) primitiveQuit(argCount int) bool {

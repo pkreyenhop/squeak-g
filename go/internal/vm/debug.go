@@ -139,3 +139,39 @@ func boolStr(b bool) string {
 	}
 	return "no"
 }
+
+// DumpMethod returns "prim=N lits: ..." for the first method with the selector.
+func (vm *Interpreter) DumpMethod(selector string) string {
+	for obj := vm.Image.FirstOldObject; obj != nil; obj = obj.NextObject {
+		if len(obj.Pointers) < 2 {
+			continue
+		}
+		arr := vm.asObj(obj.Pointers[MethodDictArray])
+		if arr == nil || arr.Pointers == nil || len(arr.Pointers)+MethodDictSelectorStart != len(obj.Pointers) {
+			continue
+		}
+		for j := 0; j < len(arr.Pointers); j++ {
+			sel := vm.asObj(obj.Pointers[MethodDictSelectorStart+j])
+			m := vm.asObj(arr.Pointers[j])
+			if sel == nil || sel.Bytes == nil || sel.BytesAsString() != selector || m == nil || !m.IsMethod() {
+				continue
+			}
+			lits := ""
+			for k := 1; k < len(m.Pointers); k++ {
+				if l := vm.asObj(m.Pointers[k]); l != nil {
+					if l.Bytes != nil {
+						lits += l.BytesAsString() + " "
+					} else if len(l.Pointers) == 4 { // named-prim spec: {module, function, ...}
+						mod := vm.asObj(l.Pointers[0])
+						fn := vm.asObj(l.Pointers[1])
+						if mod != nil && fn != nil && mod.Bytes != nil && fn.Bytes != nil {
+							lits += "<'" + mod.BytesAsString() + "' '" + fn.BytesAsString() + "'> "
+						}
+					}
+				}
+			}
+			return fmt.Sprintf("#%s prim=%d lits: %s", selector, m.MethodPrimitiveIndex(), lits)
+		}
+	}
+	return selector + ": not found"
+}

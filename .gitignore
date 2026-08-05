@@ -5,3 +5,7 @@ gh-pages
 dist/*.min.js*
 *.code-workspace
 desktop.png
+go/squeak*.png
+go/cmd/dump/
+images/Squeak1.3.image
+images/Squeak3.10.image

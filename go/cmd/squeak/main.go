@@ -22,6 +22,8 @@ import (
 
 func main() {
 	boot := flag.Int("boot", -1, "run up to N bytecodes (0 = run until idle); -1 = don't run")
+	width := flag.Int("w", 800, "screen width the image sizes its Display to")
+	height := flag.Int("h", 600, "screen height the image sizes its Display to")
 	snap := flag.String("snap", "", "after booting, render the Display to this PNG file")
 	profile := flag.Bool("profile", false, "print a backtrace and primitive histogram after booting")
 	eval := flag.String("eval", "", "print-it: compile+run a Smalltalk expression and print its printString")
@@ -53,25 +55,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Do-it / print-it: evaluate a Smalltalk expression and exit.
-	if *eval != "" || *doit != "" {
-		if *doit != "" {
-			if _, err := interp.Evaluate(*doit); err != nil {
-				fmt.Fprintln(os.Stderr, "doit:", err)
-				os.Exit(1)
-			}
-		}
-		if *eval != "" {
-			out, err := interp.PrintIt(*eval)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "print-it:", err)
-				os.Exit(1)
-			}
-			fmt.Println(out)
-		}
-		return
-	}
-
 	vm.PrintDiagnostics(img, os.Stdout)
 	fmt.Println(interp.DescribeInitialContext())
 
@@ -80,6 +63,9 @@ func main() {
 	}
 
 	if *boot >= 0 {
+		// Set a screen size before booting: images query it on start-up and
+		// size their Display to it; without it, some spin without drawing.
+		interp.SetScreenSize(*width, *height)
 		if *boot == 0 {
 			fmt.Println("booting: running until idle...")
 		} else {
@@ -93,7 +79,7 @@ func main() {
 				}
 			}()
 			if *boot == 0 {
-				interp.Boot(60_000_000)
+				interp.Boot(300_000_000)
 			} else {
 				interp.Run(*boot)
 			}
@@ -104,6 +90,21 @@ func main() {
 		if *profile {
 			printProfile(interp)
 		}
+	}
+
+	if *doit != "" {
+		if _, err := interp.Evaluate(*doit); err != nil {
+			fmt.Fprintln(os.Stderr, "doit:", err)
+			os.Exit(1)
+		}
+	}
+	if *eval != "" {
+		out, err := interp.PrintIt(*eval)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "print-it:", err)
+			os.Exit(1)
+		}
+		fmt.Println(out)
 	}
 
 	if *snap != "" {

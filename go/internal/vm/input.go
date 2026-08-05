@@ -20,6 +20,13 @@ const (
 // SetMouse records the pointer position (in Display pixels) and the full button
 // bitmask (mouse buttons OR modifier bits).
 func (vm *Interpreter) SetMouse(x, y, buttons int) {
+	if vm.prim.mouseX != x || vm.prim.mouseY != y || vm.prim.buttons != buttons {
+		vm.prim.displayIdle = 0
+		vm.isIdle = false
+		btnMask := buttons & MouseAll
+		modMask := buttons & KeyboardAll
+		vm.prim.enqueueEvent([8]int{1, vm.prim.millisecondClockValue(), x, y, btnMask, modMask, 0, 0})
+	}
 	vm.prim.mouseX = x
 	vm.prim.mouseY = y
 	vm.prim.buttons = buttons
@@ -27,7 +34,34 @@ func (vm *Interpreter) SetMouse(x, y, buttons int) {
 
 // PushKey enqueues a keyboard code (modifiers<<8 | charCode).
 func (vm *Interpreter) PushKey(code int) {
+	vm.prim.displayIdle = 0
+	vm.isIdle = false
 	vm.prim.keys = append(vm.prim.keys, code)
+	charCode := code & 0xFF
+	modifiers := (code >> 8) & 0xFF
+	vm.prim.enqueueEvent([8]int{2, vm.prim.millisecondClockValue(), charCode, 0, modifiers, charCode, 0, 0})
+}
+
+// enqueueEvent records an event for the event-driven (primitiveGetNextEvent)
+// input model and signals the input semaphore. It only queues when the image
+// has actually registered an input semaphore, so polling-only images (which
+// never drain the queue via getNextEvent) don't leak memory. The queue is also
+// capped as a safety net.
+func (p *Primitives) enqueueEvent(evt [8]int) {
+	if p.inputSemaphoreIdx <= 0 {
+		return
+	}
+	if len(p.eventQueue) >= 256 {
+		p.eventQueue = p.eventQueue[1:]
+	}
+	p.eventQueue = append(p.eventQueue, evt)
+	p.vm.SignalSemaphoreWithIndex(p.inputSemaphoreIdx)
+}
+
+// ResetIdle resets the idle counter and wakes the interpreter.
+func (vm *Interpreter) ResetIdle() {
+	vm.prim.displayIdle = 0
+	vm.isIdle = false
 }
 
 // SetScreenSize records the host screen size answered by primitiveScreenSize.
@@ -81,4 +115,41 @@ func (p *Primitives) primitiveScreenSize(argCount int) bool {
 		return false
 	}
 	return p.popNandPushIfOK(argCount+1, p.makePointWithXandY(p.screenW, p.screenH))
+}
+
+func (p *Primitives) primitiveInputSemaphore(argCount int) bool {
+	if argCount != 1 {
+		return false
+	}
+	idx := p.stackInteger(0)
+	if !p.success {
+		return false
+	}
+	p.inputSemaphoreIdx = idx
+	p.vm.popN(argCount)
+	return true
+}
+
+func (p *Primitives) primitiveGetNextEvent(argCount int) bool {
+	if argCount != 1 {
+		return false
+	}
+	evtBuf := p.asObj(p.vm.stackValue(0))
+	if evtBuf == nil || !evtBuf.IsPointers() || len(evtBuf.Pointers) < 8 {
+		return false
+	}
+	p.displayIdle++
+	if len(p.eventQueue) == 0 {
+		for i := 0; i < 8; i++ {
+			evtBuf.Pointers[i] = 0
+		}
+	} else {
+		evt := p.eventQueue[0]
+		p.eventQueue = p.eventQueue[1:]
+		for i := 0; i < 8; i++ {
+			evtBuf.Pointers[i] = evt[i]
+		}
+	}
+	p.vm.popN(argCount)
+	return true
 }

@@ -33,13 +33,15 @@ type Primitives struct {
 	nonCachedInfo atCacheEntry
 
 	// interactive input state (set by the host display backend).
-	mouseX, mouseY int
-	buttons        int
-	keys           []int
-	displayIdle    int
-	displayDirty   bool
-	screenW        int
-	screenH        int
+	mouseX, mouseY    int
+	buttons           int
+	keys              []int
+	displayIdle       int
+	displayDirty      bool
+	screenW           int
+	screenH           int
+	eventQueue        [][8]int
+	inputSemaphoreIdx int
 }
 
 type atCacheEntry struct {
@@ -204,6 +206,8 @@ func (p *Primitives) doPrimitive(index, argCount int, primMethod *Object) bool {
 		return p.primitiveArrayBecome(argCount, false, true) // one way, copy hash
 	case 75:
 		return p.popNandPushIfOK(argCount+1, p.identityHash(p.stackNonInteger(0)))
+	case 76:
+		return p.primitiveStoreStackp(argCount)
 	case 77:
 		return p.popNandPushIfOK(argCount+1, p.someInstanceOf(p.stackNonInteger(0)))
 	case 78:
@@ -241,7 +245,7 @@ func (p *Primitives) doPrimitive(index, argCount int, primMethod *Object) bool {
 	case 93:
 		return p.primitiveInputSemaphore(argCount)
 	case 94:
-		return false // getNextEvent
+		return p.primitiveGetNextEvent(argCount)
 	case 95:
 		return false // inputWord
 	case 96:
@@ -281,8 +285,20 @@ func (p *Primitives) doPrimitive(index, argCount int, primMethod *Object) bool {
 		return p.primitiveQuit(argCount)
 	case 116, 119:
 		return p.vm.flushMethodCache()
-	case 117:
+	case 117, 218:
 		return p.doNamedPrimitive(argCount, primMethod)
+	case 210:
+		if !p.oldPrims {
+			return p.popNandPushIfOK(argCount+1, p.objectAt(false, false, false))
+		}
+	case 211:
+		if !p.oldPrims {
+			return p.popNandPushIfOK(argCount+1, p.objectAtPut(false, false, false))
+		}
+	case 212:
+		if !p.oldPrims {
+			return p.popNandPushIfOK(argCount+1, p.objectSize(false))
+		}
 
 	// Misc (120-149)
 	case 121:
@@ -296,7 +312,9 @@ func (p *Primitives) doPrimitive(index, argCount int, primMethod *Object) bool {
 	case 126:
 		return false // deferDisplayUpdates
 	case 127:
-		return p.popNIfOK(argCount) // showDisplayRect (no-op flush)
+		p.displayIdle = 0
+		p.displayDirty = true
+		return p.popNIfOK(argCount)
 	case 128:
 		return p.primitiveArrayBecome(argCount, true, true) // both ways, copy hash
 	case 129:
@@ -327,10 +345,18 @@ func (p *Primitives) doPrimitive(index, argCount int, primMethod *Object) bool {
 		return false // clipboard
 	case 142:
 		return p.popNandPushIfOK(argCount+1, p.makeStString("/SqueakG"))
+	case 143, 144:
+		return p.primitiveShortAtAndPut(argCount)
+	case 145:
+		return p.primitiveConstantFill(argCount)
 	case 148:
 		return p.popNandPushIfOK(argCount+1, p.vm.Image.Clone(p.asObj(p.vm.top())))
 	case 149:
 		return p.primitiveGetAttribute(argCount)
+	case 159:
+		if !p.oldPrims {
+			return p.primitiveHashMultiply(argCount)
+		}
 	case 161: // primitiveDirectoryDelimitor (old images): answer the path
 		// separator. The classic images we run (mini.image, Squeak 1.1) are
 		// Mac-derived, and their FileDirectory>>activeDirectoryClass halts unless
@@ -360,6 +386,10 @@ func (p *Primitives) doPrimitive(index, argCount int, primMethod *Object) bool {
 		return true // forceDisplayUpdate (no-op)
 	case 233:
 		return false // setFullScreen
+	case 238:
+		return p.primitiveFloatArrayAt(argCount)
+	case 239:
+		return p.primitiveFloatArrayAtPut(argCount)
 	case 240:
 		return p.popNandPushIfOK(argCount+1, p.millisecondClockValue()*1000) // microsecondClockUTC approx
 	case 241:
@@ -393,6 +423,38 @@ func (p *Primitives) doNamedPrimitive(argCount int, primMethod *Object) bool {
 	}
 	module := p.asObj(first.Pointers[0]).BytesAsString()
 	fn := p.asObj(first.Pointers[1]).BytesAsString()
+
+	if module == "BitBltPlugin" || module == "" {
+		if fn == "primitiveCopyBits" || fn == "primitiveWarpBits" {
+			return p.primitiveCopyBits(argCount)
+		}
+	}
+	if module == "MiscPrimitivePlugin" || module == "" {
+		if res := p.dispatchMiscPrimitive(fn, argCount); res {
+			return true
+		}
+	}
+	if module == "FloatArrayPlugin" || module == "" {
+		if res := p.dispatchFloatArrayPrimitive(fn, argCount); res {
+			return true
+		}
+	}
+	if module == "Matrix2x3Plugin" || module == "" {
+		if res := p.dispatchMatrix2x3Primitive(fn, argCount); res {
+			return true
+		}
+	}
+	if module == "B2DPlugin" || module == "BalloonEnginePlugin" || module == "" {
+		if res := p.dispatchB2DPrimitive(fn, argCount); res {
+			return true
+		}
+	}
+	if module == "FilePlugin" || module == "" {
+		if fn == "primitiveDirectoryDelimitor" {
+			return p.popNandPushIfOK(argCount+1, p.charFromInt(':'))
+		}
+	}
+
 	p.warnOnce("missing named primitive: " + module + "." + fn)
 	return false
 }

@@ -120,8 +120,23 @@ func mergeRule(rule int, src, dst, mask uint32) uint32 {
 		return ^(src & dst) & mask
 	case 15:
 		return mask
+	case 16: // paint: transparent if src == 0
+		if src == 0 {
+			return dst
+		}
+		return src
+	case 17: // erase: transparent if src == 0
+		if src == 0 {
+			return dst
+		}
+		return 0
 	default:
-		return src // non-boolean rules: approximate with store
+		// For non-boolean rules (20-41 alpha blend, paint, etc.):
+		// transparent if src is 0, otherwise store src.
+		if src == 0 {
+			return dst
+		}
+		return src
 	}
 }
 

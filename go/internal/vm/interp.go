@@ -191,6 +191,9 @@ func (vm *Interpreter) Idle() bool { return vm.isIdle }
 // Quitting reports whether the image asked to quit (primitiveQuit).
 func (vm *Interpreter) Quitting() bool { return vm.prim.quitFlag }
 
+// ResetQuit clears the quit flag (used when ignoring startup quit signals).
+func (vm *Interpreter) ResetQuit() { vm.prim.quitFlag = false }
+
 // BootToIdle repeatedly runs UI cycles until the image is genuinely idle or a
 // safety cap is hit. Used for headless boot-to-snapshot.
 func (vm *Interpreter) BootToIdle(perCycleCap int) {

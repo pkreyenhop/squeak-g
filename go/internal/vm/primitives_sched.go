@@ -206,6 +206,12 @@ func (p *Primitives) signalExternalSemaphores() {
 	}
 }
 
+func (vm *Interpreter) SignalSemaphoreWithIndex(index int) {
+	if index > 0 {
+		vm.prim.semaphoresToSignal = append(vm.prim.semaphoresToSignal, index)
+	}
+}
+
 // --- blocks (old BlockContext style) -------------------------------------
 
 func (p *Primitives) doBlockCopy() Value {
