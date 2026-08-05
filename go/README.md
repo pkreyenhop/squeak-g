@@ -47,6 +47,17 @@ make run              # or: make run-fullscreen
 # equivalently: go run ./cmd/squeakgui ../demo/mini.image
 ```
 
+Other classic images boot too, e.g. the 1996 **Squeak 1.1** (the earliest
+public Squeak, a near-direct conversion of the Apple Smalltalk-80 v2 image):
+
+```bash
+make run IMAGE=images/Squeak1.1.image
+```
+
+It renders in 8-bit color. (These old Mac-derived images need the Mac path
+delimiter `:` from `primitiveDirectoryDelimitor`, or their startup halts in
+`FileDirectory>>activeDirectoryClass`.)
+
 The window sizes the Squeak display to the host screen before boot (the image
 sizes its Display to it on start-up via `primitiveScreenSize` — no manual
 "restore display" needed).

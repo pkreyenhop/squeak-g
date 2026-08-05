@@ -331,9 +331,12 @@ func (p *Primitives) doPrimitive(index, argCount int, primMethod *Object) bool {
 		return p.popNandPushIfOK(argCount+1, p.vm.Image.Clone(p.asObj(p.vm.top())))
 	case 149:
 		return p.primitiveGetAttribute(argCount)
-	case 161: // primitiveDirectoryDelimitor (old images): answer $/
+	case 161: // primitiveDirectoryDelimitor (old images): answer the path
+		// separator. The classic images we run (mini.image, Squeak 1.1) are
+		// Mac-derived, and their FileDirectory>>activeDirectoryClass halts unless
+		// this matches a MacFileDirectory (':'). Answer ':' so they boot.
 		if p.oldPrims {
-			return p.popNandPushIfOK(argCount+1, p.charFromInt('/'))
+			return p.popNandPushIfOK(argCount+1, p.charFromInt(':'))
 		}
 		return false
 

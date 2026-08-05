@@ -93,7 +93,7 @@ func main() {
 				}
 			}()
 			if *boot == 0 {
-				interp.BootToIdle(2_000_000)
+				interp.Boot(60_000_000)
 			} else {
 				interp.Run(*boot)
 			}
@@ -128,6 +128,7 @@ func main() {
 }
 
 func printProfile(interp *vm.Interpreter) {
+	fmt.Println(interp.SchedulerReport())
 	fmt.Println("backtrace at stop:")
 	for _, l := range interp.Backtrace(30) {
 		fmt.Println("  " + l)

@@ -201,6 +201,19 @@ func (vm *Interpreter) BootToIdle(perCycleCap int) {
 	}
 }
 
+// Boot runs UI cycles until the image goes idle or maxTotal bytecodes have been
+// executed. Some images (e.g. Squeak 1.1) never signal idle because their
+// background process busy-loops, so a total budget is needed to bound startup.
+func (vm *Interpreter) Boot(maxTotal int) {
+	start := vm.ByteCodeCount
+	for {
+		vm.Run(2_000_000)
+		if vm.isIdle || vm.ByteCodeCount-start >= maxTotal {
+			return
+		}
+	}
+}
+
 func (vm *Interpreter) nextByte() int {
 	b := int(vm.Method.Bytes[vm.PC])
 	vm.PC++

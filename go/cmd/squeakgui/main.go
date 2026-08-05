@@ -58,7 +58,7 @@ func main() {
 	}
 
 	fmt.Println("booting for interactive display...")
-	interp.BootToIdle(2_000_000)
+	interp.Boot(60_000_000)
 	fmt.Printf("booted in %d bytecodes; opening window\n", interp.ByteCodeCount)
 
 	be := newVMBackend(interp, img, "Squeak-G — "+flag.Arg(0))

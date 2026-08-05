@@ -70,3 +70,72 @@ func (vm *Interpreter) Backtrace(limit int) []string {
 	}
 	return out
 }
+
+// SchedulerReport summarizes the scheduler: the active process plus every
+// process queued by priority, with the top of each suspended context, and the
+// timer state. Used to diagnose why an image won't reach idle.
+func (vm *Interpreter) SchedulerReport() string {
+	names := vm.buildSelectorMap()
+	frame := func(ctx *Object) string {
+		if ctx == nil || ctx.IsNil {
+			return "<nil ctx>"
+		}
+		m := vm.asObj(ctx.Pointers[ContextMethod])
+		if _, isInt := ctx.Pointers[ContextMethod].(int); isInt {
+			if h := vm.asObj(ctx.Pointers[BlockContextHome]); h != nil {
+				m = vm.asObj(h.Pointers[ContextMethod])
+			}
+		}
+		if m == nil {
+			return "<?>"
+		}
+		if s, ok := names[m]; ok {
+			return s
+		}
+		return "<unnamed>"
+	}
+	var b []byte
+	out := func(s string) { b = append(b, s...) }
+	sched := vm.prim.getScheduler()
+	active := vm.asObj(sched.Pointers[ProcSchedActiveProcess])
+	out("active process: prio " + itoa(asIntValue(active.Pointers[ProcPriority])) + " @ " + frame(vm.ActiveContext) + "\n")
+	lists := vm.asObj(sched.Pointers[ProcSchedProcessLists])
+	for i := len(lists.Pointers) - 1; i >= 0; i-- {
+		l := vm.asObj(lists.Pointers[i])
+		p := vm.asObj(l.Pointers[LinkedListFirstLink])
+		for p != nil && !p.IsNil {
+			out("  ready prio " + itoa(i+1) + ": suspended @ " + frame(vm.asObj(p.Pointers[ProcSuspendedContext])) + "\n")
+			p = vm.asObj(p.Pointers[LinkNextLink])
+		}
+	}
+	// Dump every Process instance's suspended stack (finds ones blocked on a
+	// semaphore, which are not in the scheduler's ready lists).
+	stack := func(ctx *Object, n int) string {
+		s := ""
+		for i := 0; i < n && ctx != nil && !ctx.IsNil; i++ {
+			s += " " + frame(ctx)
+			ctx = vm.asObj(ctx.Pointers[ContextSender])
+		}
+		return s
+	}
+	procClass := vm.asObj(vm.spl(SplObClassProcess))
+	for p := vm.Image.SomeInstanceOf(procClass); p != nil; p = vm.Image.NextInstanceAfter(p) {
+		tag := ""
+		if p == active {
+			tag = " [ACTIVE]"
+		}
+		out("process prio " + itoa(asIntValue(p.Pointers[ProcPriority])) + tag + ":" + stack(vm.asObj(p.Pointers[ProcSuspendedContext]), 5) + "\n")
+	}
+	out("nextWakeupTick=" + itoa(vm.nextWakeupTick) + " now=" + itoa(vm.prim.millisecondClockValue()) + "\n")
+	timer := vm.asObj(vm.spl(SplObTheTimerSemaphore))
+	out("timer sema set=" + boolStr(timer != nil && !timer.IsNil))
+	return string(b)
+}
+
+func itoa(n int) string { return fmt.Sprintf("%d", n) }
+func boolStr(b bool) string {
+	if b {
+		return "yes"
+	}
+	return "no"
+}
