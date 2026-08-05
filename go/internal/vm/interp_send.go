@@ -3,11 +3,23 @@ package vm
 import (
 	"fmt"
 	"math"
+	"os"
 )
+
+var traceFail = os.Getenv("SQUEAKG_TRACE_FAIL") != ""
 
 // --- sending & method lookup ---------------------------------------------
 
 func (vm *Interpreter) send(selector *Object, argCount int, doSuper bool) {
+	if traceFail && vm.dnuSeen < 20 {
+		if s := selector.BytesAsString(); s == "primitiveFailed" || s == "error:" {
+			vm.dnuSeen++
+			fmt.Printf("=== #%s sent ===\n", s)
+			for _, l := range vm.Backtrace(8) {
+				fmt.Println("  " + l)
+			}
+		}
+	}
 	newRcvr := vm.stackValue(argCount)
 	var lookupClass *Object
 	if doSuper {

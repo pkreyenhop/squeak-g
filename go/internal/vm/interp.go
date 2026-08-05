@@ -55,6 +55,7 @@ type Interpreter struct {
 	verifyAtSelector *Object
 	verifyAtClass    *Object
 
+	dnuSeen       int
 	ByteCodeCount int
 	SendCount     int
 
