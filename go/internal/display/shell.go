@@ -22,6 +22,8 @@ type Backend interface {
 	Frame() *image.RGBA
 	// Step advances the VM by roughly one display frame's worth of work.
 	Step()
+	// Quit reports whether the image asked to terminate, so the window closes.
+	Quit() bool
 	// Mouse reports the pointer position (in display pixels) and the full Squeak
 	// buttons word (mouse bits OR keyboard-modifier bits).
 	Mouse(x, y, squeakButtons int)
@@ -70,6 +72,9 @@ func Run(backend Backend, fullscreen bool, scale int) error {
 func (g *game) Update() error {
 	g.pollInput()
 	g.backend.Step()
+	if g.backend.Quit() {
+		return ebiten.Termination
+	}
 	return nil
 }
 

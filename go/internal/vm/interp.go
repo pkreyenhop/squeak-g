@@ -187,6 +187,9 @@ func (vm *Interpreter) Run(maxBytecodes int) int {
 // opposed to a display/frame breakout or a bytecode cap).
 func (vm *Interpreter) Idle() bool { return vm.isIdle }
 
+// Quitting reports whether the image asked to quit (primitiveQuit).
+func (vm *Interpreter) Quitting() bool { return vm.prim.quitFlag }
+
 // BootToIdle repeatedly runs UI cycles until the image is genuinely idle or a
 // safety cap is hit. Used for headless boot-to-snapshot.
 func (vm *Interpreter) BootToIdle(perCycleCap int) {

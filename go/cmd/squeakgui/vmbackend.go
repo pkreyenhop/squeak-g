@@ -40,6 +40,8 @@ func (b *vmBackend) render() {
 	}
 }
 
+func (b *vmBackend) Quit() bool { return b.interp.Quitting() }
+
 func (b *vmBackend) Mouse(x, y, squeakButtons int) {
 	b.interp.SetMouse(x, y, squeakButtons)
 }
